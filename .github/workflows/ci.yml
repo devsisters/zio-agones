@@ -48,6 +48,9 @@ jobs:
 
   publish:
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        java: [ 'adopt@1.11' ]
     needs: [lint, test]
     if: github.event_name != 'pull_request'
     steps:
