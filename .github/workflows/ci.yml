@@ -57,6 +57,8 @@ jobs:
           fetch-depth: 0
       - name: Setup Scala and Java
         uses: olafurpg/setup-scala@v10
+        with:
+          java-version: ${{ matrix.java }}
       - name: Cache scala dependencies
         uses: coursier/cache-action@v5
       - name: Release artifacts
