@@ -9,6 +9,7 @@ lazy val root = (project in file("."))
   .settings(
     name                   := "zio-agones",
     organization           := "com.devsisters",
+    homepage               := Some(url("https://github.com/devsisters/zio-agones")),
     scalaVersion           := scala213,
     crossScalaVersions     := allScala,
     licenses               := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
