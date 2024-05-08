@@ -1,5 +1,5 @@
-val scala213 = "2.13.11"
-val scala3   = "3.3.0"
+val scala213 = "2.13.14"
+val scala3   = "3.3.3"
 val allScala = Seq(scala213, scala3)
 
 addCommandAlias("fmt", "all scalafmtSbt scalafmt test:scalafmt")
@@ -27,7 +27,7 @@ lazy val root = (project in file("."))
       scalapb.zio_grpc.ZioCodeGenerator -> (Compile / sourceManaged).value / "scalapb"
     ),
     libraryDependencies ++= Seq(
-      "io.grpc"               % "grpc-netty"           % "1.41.0",
+      "io.grpc"               % "grpc-netty"           % "1.63.0",
       "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % scalapb.compiler.Version.scalapbVersion
     ),
     sonatypeRepository     := "https://s01.oss.sonatype.org/service/local",
