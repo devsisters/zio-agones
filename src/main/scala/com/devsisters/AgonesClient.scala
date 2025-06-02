@@ -37,7 +37,7 @@ object AgonesClient {
       for {
         host   <- System.env("AGONES_SDK_GRPC_HOST").someOrElse("localhost")
         port   <- System.env("AGONES_SDK_GRPC_PORT").map(_.flatMap(_.toIntOption)).someOrElse(9357)
-        builder = ManagedChannelBuilder.forAddress(host, port).usePlaintext()
+        builder = ManagedChannelBuilder.forAddress(host, port).maxInboundMessageSize(128 * 1024 * 1024).usePlaintext()
         client <- SDKClient.scoped(scalapb.zio_grpc.ZManagedChannel(builder))
       } yield AgonesClientLive(client)
     }
