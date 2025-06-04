@@ -22,3 +22,5 @@ package-lock.json
 node_modules/
 .DS_Store
 vuepress/docs/.vuepress/dist
+.cursor
+project/project/metals.sbt
