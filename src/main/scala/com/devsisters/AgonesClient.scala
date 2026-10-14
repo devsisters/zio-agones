@@ -1,7 +1,8 @@
 package com.devsisters
 
 import agones.dev.sdk.sdk
-import agones.dev.sdk.sdk.ZioSdk.SDKClient
+import agones.dev.sdk.sdk.SDKGrpc
+import agones.dev.sdk.sdk.SDKGrpc.SDK
 import io.grpc.ManagedChannelBuilder
 import zio._
 import zio.stream.ZStream
@@ -19,17 +20,56 @@ trait AgonesClient {
 }
 
 object AgonesClient {
-  private case class AgonesClientLive(client: SDKClient) extends AgonesClient {
-    val ready: Task[Unit]                                        = client.ready(sdk.Empty()).unit
-    val allocate: Task[Unit]                                     = client.allocate(sdk.Empty()).unit
-    val shutdown: Task[Unit]                                     = client.shutdown(sdk.Empty()).unit
+  private case class AgonesClientLive(client: SDK) extends AgonesClient {
+    private def await[A](future: => scala.concurrent.Future[A]): Task[A] =
+      ZIO.fromFuture(_ => future)
+
+    val ready: Task[Unit]                                        = await(client.ready(sdk.Empty())).unit
+    val allocate: Task[Unit]                                     = await(client.allocate(sdk.Empty())).unit
+    val shutdown: Task[Unit]                                     = await(client.shutdown(sdk.Empty())).unit
     def health(schedule: Schedule[Any, Any, Unit]): Task[Unit]   =
-      client.health(ZStream.fromSchedule(schedule).as(sdk.Empty())).unit
-    val getGameServer: Task[sdk.GameServer]                      = client.getGameServer(sdk.Empty())
-    val watchGameServer: ZStream[Any, Throwable, sdk.GameServer] = client.watchGameServer(sdk.Empty())
-    def setLabel(key: String, value: String): Task[Unit]         = client.setLabel(sdk.KeyValue(key, value)).unit
-    def setAnnotation(key: String, value: String): Task[Unit]    = client.setAnnotation(sdk.KeyValue(key, value)).unit
-    def reserve(duration: Duration): Task[Unit]                  = client.reserve(sdk.Duration(duration.toSeconds)).unit
+      for {
+        response <- Promise.make[Throwable, sdk.Empty]
+        requests <- ZIO.attempt {
+                      client.health(
+                        new io.grpc.stub.StreamObserver[sdk.Empty] {
+                          def onNext(value: sdk.Empty): Unit  = Unsafe.unsafe { implicit unsafe =>
+                            Runtime.default.unsafe.run(response.succeed(value)).getOrThrowFiberFailure()
+                          }
+                          def onError(error: Throwable): Unit = Unsafe.unsafe { implicit unsafe =>
+                            Runtime.default.unsafe.run(response.fail(error)).getOrThrowFiberFailure()
+                          }
+                          def onCompleted(): Unit             = Unsafe.unsafe { implicit unsafe =>
+                            Runtime.default.unsafe.run(response.succeed(sdk.Empty())).getOrThrowFiberFailure()
+                          }
+                        }
+                      )
+                    }
+        sender   <- ZStream
+                      .fromSchedule(schedule)
+                      .runForeach(_ => ZIO.attempt(requests.onNext(sdk.Empty())))
+                      .ensuring(ZIO.attempt(requests.onCompleted()).ignore)
+                      .fork
+        _        <- response.await
+        _        <- sender.interrupt
+      } yield ()
+    val getGameServer: Task[sdk.GameServer]                      = await(client.getGameServer(sdk.Empty()))
+    val watchGameServer: ZStream[Any, Throwable, sdk.GameServer] =
+      ZStream.async[Any, Throwable, sdk.GameServer] { emit =>
+        client.watchGameServer(
+          sdk.Empty(),
+          new io.grpc.stub.StreamObserver[sdk.GameServer] {
+            def onNext(value: sdk.GameServer): Unit = emit(ZIO.succeed(zio.Chunk.single(value)))
+            def onError(error: Throwable): Unit     = emit(ZIO.fail(Some(error)))
+            def onCompleted(): Unit                 = emit(ZIO.fail(None))
+          }
+        )
+      }
+    def setLabel(key: String, value: String): Task[Unit]         = await(client.setLabel(sdk.KeyValue(key, value))).unit
+    def setAnnotation(key: String, value: String): Task[Unit]    = await(
+      client.setAnnotation(sdk.KeyValue(key, value))
+    ).unit
+    def reserve(duration: Duration): Task[Unit]                  = await(client.reserve(sdk.Duration(duration.toSeconds))).unit
   }
 
   val live: ZLayer[Any, Throwable, AgonesClient] =
@@ -37,8 +77,13 @@ object AgonesClient {
       for {
         host   <- System.env("AGONES_SDK_GRPC_HOST").someOrElse("localhost")
         port   <- System.env("AGONES_SDK_GRPC_PORT").map(_.flatMap(_.toIntOption)).someOrElse(9357)
-        builder = ManagedChannelBuilder.forAddress(host, port).maxInboundMessageSize(128 * 1024 * 1024).usePlaintext()
-        client <- SDKClient.scoped(scalapb.zio_grpc.ZManagedChannel(builder))
+        channel = ManagedChannelBuilder
+                    .forAddress(host, port)
+                    .maxInboundMessageSize(128 * 1024 * 1024)
+                    .usePlaintext()
+                    .build()
+        _      <- ZIO.addFinalizer(ZIO.succeed(channel.shutdown()).unit)
+        client  = SDKGrpc.stub(channel)
       } yield AgonesClientLive(client)
     }
 
