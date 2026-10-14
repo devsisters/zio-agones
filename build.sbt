@@ -7,17 +7,17 @@ lazy val root = (project in file("."))
   .settings(
     name                                                  := "zio-agones",
     organization                                          := "com.devsisters",
-    homepage                                              := Some(url("https://github.com/devsisters/zio-agones")),
+    homepage                                              := Some(uri("https://github.com/devsisters/zio-agones")),
     scalaVersion                                          := scala3,
-    licenses                                              := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+    licenses                                              := List("Apache-2.0" -> uri("http://www.apache.org/licenses/LICENSE-2.0")),
     scmInfo                                               := Some(
       ScmInfo(
-        url("https://github.com/devsisters/zio-agones"),
+        uri("https://github.com/devsisters/zio-agones"),
         "scm:git:git@github.com:devsisters/zio-agones.git"
       )
     ),
     developers                                            := List(
-      Developer("ghostdogpr", "Pierre Ricadat", "ghostdogpr@gmail.com", url("https://github.com/ghostdogpr"))
+      Developer("ghostdogpr", "Pierre Ricadat", "ghostdogpr@gmail.com", uri("https://github.com/ghostdogpr"))
     ),
     libraryDependencies += "dev.zio"                      %% "zio-streams" % "2.1.25",
     Compile / PB.targets                                  := Seq(
